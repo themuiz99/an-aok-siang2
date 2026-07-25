@@ -5,12 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TheMuiz อ่านออกเสียง</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Scripts for ResponsiveVoice -->
-    <script id="voice-female" src="https://code.responsivevoice.org/responsivevoice.js?key=Negu9VLC"></script>
-    <script id="voice-male" src="https://code.responsivevoice.org/responsivevoice.js?key=6uRDqcc4"></script>
-
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        
         body {
             font-family: 'Inter', sans-serif;
             background-color: #1a202c;
@@ -18,11 +15,10 @@
             flex-direction: column;
             justify-content: space-between;
             align-items: center;
-            height: 100vh;
+            min-height: 100vh;
             margin: 0;
             padding: 1rem;
             box-sizing: border-box;
-            overflow: hidden;
         }
         #statusMessage {
             min-height: 1.5rem;
@@ -59,6 +55,43 @@
             display: none;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        /* Modal styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+            padding: 1rem;
+        }
+        .modal-overlay.show {
+            display: flex;
+        }
+        .modal-content {
+            background: #2d3748;
+            border-radius: 1rem;
+            padding: 1.5rem;
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+            border: 1px solid #4a5568;
+        }
+        .step-number {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            background: #3b82f6;
+            color: white;
+            border-radius: 50%;
+            font-weight: bold;
+            font-size: 14px;
+            margin-right: 8px;
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-white">
@@ -82,10 +115,11 @@
         <!-- Voice Selection Area -->
         <div class="w-full mb-4">
             <p class="text-xs text-gray-400 mb-1 text-center">เลือกเสียง:</p>
-            <div class="flex space-x-2">
+            <div class="flex space-x-2" id="voiceButtons">
                 <button id="selectFemale" class="option-btn active flex-1 py-2 px-2 rounded-lg border border-gray-600 bg-gray-700 text-xs transition-all">👩 เสียงผู้หญิง</button>
                 <button id="selectMale" class="option-btn flex-1 py-2 px-2 rounded-lg border border-gray-600 bg-gray-700 text-xs transition-all">👨 เสียงผู้ชาย</button>
             </div>
+            <p id="voiceWarning" class="text-xs text-yellow-400 mt-1 text-center hidden">⚠️ ระบบนี้มีเสียงเดียว ไม่สามารถแยกเพศได้</p>
         </div>
 
         <!-- Speed Selection Area -->
@@ -124,6 +158,36 @@
         Creator: TheMuiz × หนูมะลิ
     </footer>
 
+    <!-- Modal สำหรับอธิบายขั้นตอนดาวน์โหลด -->
+    <div id="downloadModal" class="modal-overlay">
+        <div class="modal-content">
+            <h3 class="text-xl font-bold text-white mb-4">📥 วิธีบันทึกไฟล์เสียง</h3>
+            <div class="text-left text-gray-300 text-sm space-y-3 mb-4">
+                <div class="flex items-start">
+                    <span class="step-number">1</span>
+                    <span>กด <b>"เลือกแท็บนี้"</b> ในหน้าต่างที่โผล่ขึ้นมา</span>
+                </div>
+                <div class="flex items-start">
+                    <span class="step-number">2</span>
+                    <span>อย่าลืมเปิด <b>"แชร์เสียงแท็บ"</b> (Share tab audio) ด้วยนะ!</span>
+                </div>
+                <div class="flex items-start">
+                    <span class="step-number">3</span>
+                    <span>รอระบบอ่านจบ ไฟล์จะดาวน์โหลดอัตโนมัติค่ะ</span>
+                </div>
+            </div>
+            <div class="bg-gray-700 rounded-lg p-3 mb-4">
+                <p class="text-xs text-yellow-300">💡 ทิป: ถ้าไม่เห็นตัวเลือกเสียง ให้กดปุ่มแชร์แล้วคลิกที่รูปลูกศร ▼ ข้างชื่อแท็บ</p>
+            </div>
+            <button id="startDownloadBtn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition">
+                เข้าใจแล้ว เริ่มบันทึกเลย!
+            </button>
+            <button id="cancelDownloadBtn" class="w-full mt-2 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition">
+                ยกเลิก
+            </button>
+        </div>
+    </div>
+
     <script>
         function filterTextToSpeak(text) {
             return text.replace(/[^ก-๙a-zA-Z0-9\s\n]/g, '');
@@ -139,6 +203,7 @@
             const statusMessage = document.getElementById('statusMessage');
             const loadingIcon = document.getElementById('loadingIcon');
             const downloadProgress = document.getElementById('downloadProgress');
+            const voiceWarning = document.getElementById('voiceWarning');
             
             const btnFemale = document.getElementById('selectFemale');
             const btnMale = document.getElementById('selectMale');
@@ -146,12 +211,52 @@
             const btnNormal = document.getElementById('speedNormal');
             const btnFast = document.getElementById('speedFast');
             
-            let selectedVoice = 'Thai Female';
+            const downloadModal = document.getElementById('downloadModal');
+            const startDownloadBtn = document.getElementById('startDownloadBtn');
+            const cancelDownloadBtn = document.getElementById('cancelDownloadBtn');
+            
+            const synth = window.speechSynthesis;
+            let voices = [];
+            let thaiVoices = [];
+            let selectedVoice = null; // null = default
             let currentRate = 1;
             let isPaused = false;
-            let currentTextArray = [];
-            let currentIndex = 0;
+            let currentUtterance = null;
             let isDownloading = false;
+            let pendingDownload = false;
+
+            // ========== โหลดรายการเสียง ==========
+            function loadVoices() {
+                voices = synth.getVoices();
+                thaiVoices = voices.filter(v => v.lang.startsWith('th'));
+                
+                if (thaiVoices.length === 0) {
+                    // ถ้าไม่มีเสียงไทย ให้ใช้ default
+                    voiceWarning.textContent = '⚠️ ไม่พบเสียงภาษาไทยในเครื่อง กรุณาติดตั้ง Thai Language Pack';
+                    voiceWarning.classList.remove('hidden');
+                    btnFemale.disabled = true;
+                    btnMale.disabled = true;
+                    btnFemale.classList.add('opacity-50');
+                    btnMale.classList.add('opacity-50');
+                } else if (thaiVoices.length === 1) {
+                    // มีแค่เสียงเดียว
+                    voiceWarning.classList.remove('hidden');
+                    selectedVoice = thaiVoices[0];
+                } else {
+                    // มีหลายเสียง - พยายามแยกเพศจากชื่อ
+                    voiceWarning.classList.add('hidden');
+                    // เลือกเสียงแรกเป็นค่าเริ่มต้น (มักจะเป็นผู้หญิง)
+                    selectedVoice = thaiVoices.find(v => 
+                        /female|woman|girl|หญิง|female/i.test(v.name)
+                    ) || thaiVoices[0];
+                }
+            }
+
+            // Chrome โหลดเสียงแบบ async
+            if (speechSynthesis.onvoiceschanged !== undefined) {
+                speechSynthesis.onvoiceschanged = loadVoices;
+            }
+            loadVoices();
 
             // อัปเดตจำนวนตัวอักษร
             speechText.addEventListener('input', () => {
@@ -163,166 +268,244 @@
                 otherBtns.forEach(btn => btn.classList.remove('active'));
             }
 
-            function stopSpeaking(resetIndex = true) {
-                if (typeof responsiveVoice !== 'undefined') responsiveVoice.cancel();
-                if (resetIndex) {
-                    isPaused = false;
-                    currentIndex = 0;
-                }
+            function stopSpeaking() {
+                synth.cancel();
+                isPaused = false;
             }
 
-            btnFemale.addEventListener('click', () => { selectedVoice = 'Thai Female'; updateUI(btnFemale, [btnMale]); stopSpeaking(false); });
-            btnMale.addEventListener('click', () => { selectedVoice = 'Thai Male'; updateUI(btnMale, [btnFemale]); stopSpeaking(false); });
-            btnSlow.addEventListener('click', () => { currentRate = 0.7; updateUI(btnSlow, [btnNormal, btnFast]); stopSpeaking(false); });
-            btnNormal.addEventListener('click', () => { currentRate = 1; updateUI(btnNormal, [btnSlow, btnFast]); stopSpeaking(false); });
-            btnFast.addEventListener('click', () => { currentRate = 1.2; updateUI(btnFast, [btnSlow, btnNormal]); stopSpeaking(false); });
+            // ========== เลือกเสียง ==========
+            btnFemale.addEventListener('click', () => {
+                if (thaiVoices.length <= 1) return;
+                updateUI(btnFemale, [btnMale]);
+                // หาเสียงผู้หญิง
+                selectedVoice = thaiVoices.find(v => 
+                    /female|woman|girl|หญิง|female/i.test(v.name)
+                ) || thaiVoices[0];
+                stopSpeaking();
+            });
 
-            function playFromIndex(index) {
-                if (index >= currentTextArray.length) {
-                    statusMessage.textContent = 'อ่านจบแล้วค่ะ!';
-                    isPaused = false;
-                    currentIndex = 0;
-                    return;
-                }
-                currentIndex = index;
-                responsiveVoice.speak(currentTextArray[currentIndex], selectedVoice, {
-                    rate: currentRate,
-                    onend: () => { 
-                        if (!isPaused) playFromIndex(currentIndex + 1);
-                    }
-                });
-            }
+            btnMale.addEventListener('click', () => {
+                if (thaiVoices.length <= 1) return;
+                updateUI(btnMale, [btnFemale]);
+                // หาเสียงผู้ชาย
+                selectedVoice = thaiVoices.find(v => 
+                    /male|man|boy|ชาย|male/i.test(v.name)
+                ) || thaiVoices[thaiVoices.length - 1];
+                stopSpeaking();
+            });
 
+            btnSlow.addEventListener('click', () => { currentRate = 0.7; updateUI(btnSlow, [btnNormal, btnFast]); stopSpeaking(); });
+            btnNormal.addEventListener('click', () => { currentRate = 1; updateUI(btnNormal, [btnSlow, btnFast]); stopSpeaking(); });
+            btnFast.addEventListener('click', () => { currentRate = 1.3; updateUI(btnFast, [btnSlow, btnNormal]); stopSpeaking(); });
+
+            // ========== ฟังสด ==========
             speakButton.addEventListener('click', () => {
                 if (isDownloading) return;
-                if (typeof responsiveVoice === 'undefined') {
-                    statusMessage.textContent = 'ระบบเสียงยังโหลดไม่เสร็จ รอสักครู่นะคะ';
+                if (!synth) {
+                    statusMessage.textContent = 'เบราว์เซอร์นี้ไม่รองรับการอ่านออกเสียงค่ะ';
                     return;
                 }
+                
                 const filteredText = filterTextToSpeak(speechText.value.trim());
-                if (!filteredText) { statusMessage.textContent = 'กรุณาพิมพ์ข้อความก่อนนะจ๊ะ!'; return; }
-
-                currentTextArray = filteredText.split(/([。！？.!?\n])/).filter(s => s.trim().length > 0);
-                if (currentTextArray.length === 0) currentTextArray = [filteredText];
+                if (!filteredText) {
+                    statusMessage.textContent = 'กรุณาพิมพ์ข้อความก่อนนะจ๊ะ!';
+                    return;
+                }
 
                 stopSpeaking();
                 statusMessage.textContent = 'กำลังอ่านออกเสียง...';
-                playFromIndex(0);
+                
+                currentUtterance = new SpeechSynthesisUtterance(filteredText);
+                currentUtterance.voice = selectedVoice;
+                currentUtterance.rate = currentRate;
+                currentUtterance.lang = 'th-TH';
+                currentUtterance.pitch = 1;
+                
+                currentUtterance.onend = () => {
+                    statusMessage.textContent = 'อ่านจบแล้วค่ะ!';
+                    isPaused = false;
+                };
+                
+                currentUtterance.onerror = (e) => {
+                    if (e.error !== 'canceled') {
+                        statusMessage.textContent = 'เกิดข้อผิดพลาดในการอ่านค่ะ';
+                    }
+                };
+                
+                synth.speak(currentUtterance);
             });
 
+            // ========== หยุดพัก/อ่านต่อ ==========
             pauseButton.addEventListener('click', () => {
                 if (isDownloading) return;
-                if (typeof responsiveVoice === 'undefined' || currentTextArray.length === 0) return;
-                if (responsiveVoice.isPlaying()) {
-                    responsiveVoice.cancel();
-                    isPaused = true;
-                    statusMessage.textContent = 'หยุดพักแล้วค่ะ';
-                } else if (isPaused) {
-                    isPaused = false;
-                    statusMessage.textContent = 'กำลังอ่านต่อค่ะ...';
-                    playFromIndex(currentIndex);
+                if (!synth) return;
+                
+                if (synth.speaking) {
+                    if (isPaused) {
+                        synth.resume();
+                        isPaused = false;
+                        statusMessage.textContent = 'กำลังอ่านต่อค่ะ...';
+                    } else {
+                        synth.pause();
+                        isPaused = true;
+                        statusMessage.textContent = 'หยุดพักแล้วค่ะ';
+                    }
                 }
             });
 
-            // ฟังก์ชันหั่นข้อความยาวๆ เป็นท่อนเล็กๆ
-            function chunkText(text, maxLen) {
-                if (text.length <= maxLen) return [text];
-                
-                const words = text.split(/([\s\n]+)/); 
-                const chunks = [];
-                let currentChunk = '';
-
-                for (let word of words) {
-                    if ((currentChunk + word).length > maxLen) {
-                        if (currentChunk.trim().length > 0) chunks.push(currentChunk.trim());
-                        currentChunk = word;
-                    } else {
-                        currentChunk += word;
-                    }
-                }
-                if (currentChunk.trim().length > 0) chunks.push(currentChunk.trim());
-                
-                // ถ้า chunks ว่างเปล่า (กรณีพิเศษ) ให้ตัดแบ่งตาม maxLen เลย
-                if (chunks.length === 0 && text.length > 0) {
-                    for (let i = 0; i < text.length; i += maxLen) {
-                        chunks.push(text.slice(i, i + maxLen));
-                    }
-                }
-                return chunks;
-            }
-
-            // ฟังก์ชันดาวน์โหลดไฟล์เสียงโดยตรง (แก้ปัญหา fetch CORS)
-            function triggerDownload(url, filename) {
-                const a = document.createElement('a');
-                a.style.display = 'none';
-                a.href = url;
-                a.download = filename;
-                a.target = '_blank';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-            }
-
-            // ปุ่มดาวน์โหลด (แก้ไขใหม่ - ไม่ใช้ fetch แล้ว)
-            downloadButton.addEventListener('click', async () => {
+            // ========== ดาวน์โหลดไฟล์เสียง ==========
+            // ใช้ getDisplayMedia + MediaRecorder บันทึกเสียงจากแท็บ
+            
+            downloadButton.addEventListener('click', () => {
                 if (isDownloading) return;
-
-                const rawText = speechText.value.trim();
-                const filteredText = filterTextToSpeak(rawText);
-                if (!filteredText) { 
-                    statusMessage.textContent = 'พิมพ์ข้อความก่อนนะคะ!'; 
-                    return; 
+                
+                const filteredText = filterTextToSpeak(speechText.value.trim());
+                if (!filteredText) {
+                    statusMessage.textContent = 'พิมพ์ข้อความก่อนนะคะ!';
+                    return;
                 }
 
-                stopSpeaking();
-                isDownloading = true;
-                downloadButton.classList.add('opacity-50', 'cursor-not-allowed');
-                loadingIcon.style.display = 'inline-block';
-                downloadProgress.style.width = '0%';
+                // แสดง modal อธิบายขั้นตอน
+                pendingDownload = { text: filteredText };
+                downloadModal.classList.add('show');
+            });
 
-                // หั่นข้อความ ท่อนละไม่เกิน 600 ตัวอักษร
-                const chunks = chunkText(filteredText, 600);
-                const totalChunks = chunks.length;
-                const apiKey = selectedVoice === 'Thai Female' ? 'Negu9VLC' : '6uRDqcc4';
+            cancelDownloadBtn.addEventListener('click', () => {
+                downloadModal.classList.remove('show');
+                pendingDownload = false;
+            });
+
+            startDownloadBtn.addEventListener('click', async () => {
+                downloadModal.classList.remove('show');
+                if (!pendingDownload) return;
                 
-                statusMessage.textContent = totalChunks > 1 
-                    ? `กำลังเตรียมดาวน์โหลด ${totalChunks} ไฟล์...` 
-                    : 'กำลังเตรียมดาวน์โหลด...';
+                await startRecording(pendingDownload.text);
+                pendingDownload = false;
+            });
+
+            async function startRecording(text) {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+                    statusMessage.textContent = 'เบราว์เซอร์นี้ไม่รองรับการบันทึกเสียงค่ะ';
+                    return;
+                }
 
                 try {
-                    // ดาวน์โหลดทีละท่อน (เว้นระยะห่างเล็กน้อยเพื่อไม่ให้บราวเซอร์บล็อก)
-                    for (let i = 0; i < totalChunks; i++) {
-                        const url = `https://code.responsivevoice.org/getvoice.php?t=${encodeURIComponent(chunks[i])}&tl=th&sv=&vn=${encodeURIComponent(selectedVoice)}&pitch=0.5&rate=${currentRate}&vol=1&key=${apiKey}`;
-                        
-                        const filename = totalChunks > 1 
-                            ? `TheMuiz_Audio_Part${i + 1}_of_${totalChunks}.mp3` 
-                            : `TheMuiz_Audio_${Date.now()}.mp3`;
-                        
-                        triggerDownload(url, filename);
-                        
-                        downloadProgress.style.width = `${((i + 1) / totalChunks) * 100}%`;
-                        statusMessage.textContent = `ดาวน์โหลดส่วนที่ ${i + 1} จาก ${totalChunks} ...`;
-                        
-                        // พักหายใจระหว่างไฟล์ (ป้องกัน popup blocker / rate limit)
-                        if (i < totalChunks - 1) {
-                            await new Promise(r => setTimeout(r, 800));
-                        }
+                    isDownloading = true;
+                    downloadButton.classList.add('opacity-50', 'cursor-not-allowed');
+                    loadingIcon.style.display = 'inline-block';
+                    statusMessage.textContent = 'รอสักครู่... กำลังขอสิทธิ์บันทึกแท็บ';
+
+                    // ขอสิทธิ์แชร์แท็บพร้อมเสียง
+                    const stream = await navigator.mediaDevices.getDisplayMedia({
+                        audio: true,
+                        video: { displaySurface: 'browser' }
+                    });
+
+                    // ตรวจสอบว่ามี audio track จริงๆ
+                    const audioTracks = stream.getAudioTracks();
+                    if (audioTracks.length === 0) {
+                        throw new Error('ไม่ได้เปิดเสียงแท็บ กรุณาลองใหม่');
                     }
 
-                    statusMessage.textContent = totalChunks > 1 
-                        ? 'ดาวน์โหลดครบทุกส่วนแล้วค่ะ! 🎉' 
-                        : 'ดาวน์โหลดสำเร็จแล้วค่ะ! 🎉';
+                    statusMessage.textContent = 'กำลังบันทึกเสียง... อ่านเลย!';
+                    downloadProgress.style.width = '10%';
+
+                    const mediaRecorder = new MediaRecorder(stream);
+                    const chunks = [];
+
+                    mediaRecorder.ondataavailable = (e) => {
+                        if (e.data.size > 0) chunks.push(e.data);
+                    };
+
+                    mediaRecorder.onstop = () => {
+                        const blob = new Blob(chunks, { type: 'audio/webm' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.style.display = 'none';
+                        a.href = url;
+                        a.download = `TheMuiz_Audio_${Date.now()}.webm`;
+                        document.body.appendChild(a);
+                        a.click();
+                        
+                        setTimeout(() => {
+                            document.body.removeChild(a);
+                            URL.revokeObjectURL(url);
+                        }, 100);
+
+                        statusMessage.textContent = 'บันทึกเสียงสำเร็จแล้วค่ะ! 🎉';
+                        downloadProgress.style.width = '100%';
+                    };
+
+                    mediaRecorder.onerror = () => {
+                        throw new Error('การบันทึกเสียงผิดพลาด');
+                    };
+
+                    // เริ่มบันทึก
+                    mediaRecorder.start();
+                    downloadProgress.style.width = '30%';
+
+                    // อ่านข้อความ
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    utterance.voice = selectedVoice;
+                    utterance.rate = currentRate;
+                    utterance.lang = 'th-TH';
+                    utterance.pitch = 1;
+
+                    // อัปเดต progress ตามเวลาโดยประมาณ
+                    const estimatedDuration = (text.length / 5) * (1 / currentRate) * 1000; // ประมาณการ ms
+                    const progressInterval = setInterval(() => {
+                        const currentWidth = parseFloat(downloadProgress.style.width) || 30;
+                        if (currentWidth < 90) {
+                            downloadProgress.style.width = (currentWidth + 2) + '%';
+                        }
+                    }, estimatedDuration / 30);
+
+                    utterance.onend = () => {
+                        clearInterval(progressInterval);
+                        downloadProgress.style.width = '95%';
+                        // รอสักครู่ให้เสียงสุดท้ายถูกบันทึก
+                        setTimeout(() => {
+                            mediaRecorder.stop();
+                            // ปิด stream
+                            stream.getTracks().forEach(track => track.stop());
+                        }, 500);
+                    };
+
+                    utterance.onerror = (e) => {
+                        clearInterval(progressInterval);
+                        if (e.error !== 'canceled') {
+                            mediaRecorder.stop();
+                            stream.getTracks().forEach(track => track.stop());
+                            statusMessage.textContent = 'เกิดข้อผิดพลาดขณะอ่านค่ะ';
+                        }
+                    };
+
+                    synth.speak(utterance);
+
+                    // ถ้า user ปิดการแชร์ก่อนเวลา
+                    stream.getVideoTracks()[0]?.addEventListener('ended', () => {
+                        clearInterval(progressInterval);
+                        if (mediaRecorder.state !== 'inactive') {
+                            mediaRecorder.stop();
+                        }
+                        synth.cancel();
+                        isDownloading = false;
+                        downloadButton.classList.remove('opacity-50', 'cursor-not-allowed');
+                        loadingIcon.style.display = 'none';
+                        if (chunks.length > 0) {
+                            statusMessage.textContent = 'บันทึกเสียงสำเร็จ (ถูกหยุดก่อนเวลา)';
+                        }
+                    });
 
                 } catch (error) {
                     console.error(error);
-                    statusMessage.textContent = 'เกิดข้อผิดพลาด ลองรีเฟรชหน้าแล้วลองใหม่นะคะ';
-                } finally {
+                    statusMessage.textContent = error.message || 'เกิดข้อผิดพลาด ลองใหม่อีกครั้งนะคะ';
                     isDownloading = false;
                     downloadButton.classList.remove('opacity-50', 'cursor-not-allowed');
-                    loadingIcon.style.display = 'none';
-                    setTimeout(() => { downloadProgress.style.width = '0%'; }, 3000);
+                    loadingIcon.style.display = 'none');
+                    downloadProgress.style.width = '0%';
                 }
-            });
+            }
 
             clearButton.addEventListener('click', () => { 
                 if (isDownloading) return;
