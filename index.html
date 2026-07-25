@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TheMuiz อ่านออกเสียง</title>
-    <!-- Load Tailwind CSS for styling and responsiveness -->
     <script src="https://cdn.tailwindcss.com"></script>
     
     <!-- Scripts for ResponsiveVoice -->
@@ -47,7 +46,6 @@
             background-color: #1e3a8a;
             color: white;
         }
-        /* Loader Animation */
         .loader {
             border: 3px solid #f3f3f3;
             border-top: 3px solid #3498db;
@@ -76,7 +74,7 @@
                 id="speechText"
                 class="w-full p-4 pb-7 bg-gray-700 text-white rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                 rows="5"
-                placeholder="พิมพ์ข้อความที่นี่เลยครับพี่มุ่ย..."
+                placeholder="พิมพ์ข้อความที่นี่เลยค่ะ..."
             ></textarea>
             <span id="charCount" class="absolute bottom-2 right-3 text-xs text-gray-400 pointer-events-none">0</span>
         </div>
@@ -115,7 +113,6 @@
             <div class="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4 w-full">
                 <button id="downloadButton" class="flex-[2] bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition transform hover:scale-105 relative overflow-hidden">
                     💾 บันทึกไฟล์เสียง
-                    <!-- หลอดเปอร์เซ็นต์โหลดอยู่หลังข้อความ -->
                     <div id="downloadProgress" class="absolute left-0 bottom-0 h-1 bg-green-300 w-0 transition-all duration-300"></div>
                 </button>
                 <button id="clearButton" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition transform hover:scale-105">ล้างข้อความ</button>
@@ -154,9 +151,9 @@
             let isPaused = false;
             let currentTextArray = [];
             let currentIndex = 0;
-
             let isDownloading = false;
 
+            // อัปเดตจำนวนตัวอักษร
             speechText.addEventListener('input', () => {
                 charCount.textContent = speechText.value.length;
             });
@@ -182,7 +179,7 @@
 
             function playFromIndex(index) {
                 if (index >= currentTextArray.length) {
-                    statusMessage.textContent = 'อ่านจบแล้วครับ!';
+                    statusMessage.textContent = 'อ่านจบแล้วค่ะ!';
                     isPaused = false;
                     currentIndex = 0;
                     return;
@@ -197,10 +194,13 @@
             }
 
             speakButton.addEventListener('click', () => {
-                if (isDownloading) return; 
-                if (typeof responsiveVoice === 'undefined') return;
+                if (isDownloading) return;
+                if (typeof responsiveVoice === 'undefined') {
+                    statusMessage.textContent = 'ระบบเสียงยังโหลดไม่เสร็จ รอสักครู่นะคะ';
+                    return;
+                }
                 const filteredText = filterTextToSpeak(speechText.value.trim());
-                if (!filteredText) { statusMessage.textContent = 'กรุณาพิมพ์ข้อความก่อนนะครับพี่มุ่ย!'; return; }
+                if (!filteredText) { statusMessage.textContent = 'กรุณาพิมพ์ข้อความก่อนนะจ๊ะ!'; return; }
 
                 currentTextArray = filteredText.split(/([。！？.!?\n])/).filter(s => s.trim().length > 0);
                 if (currentTextArray.length === 0) currentTextArray = [filteredText];
@@ -216,104 +216,111 @@
                 if (responsiveVoice.isPlaying()) {
                     responsiveVoice.cancel();
                     isPaused = true;
-                    statusMessage.textContent = 'หยุดพักแล้วครับ';
+                    statusMessage.textContent = 'หยุดพักแล้วค่ะ';
                 } else if (isPaused) {
                     isPaused = false;
-                    statusMessage.textContent = 'กำลังอ่านต่อครับ...';
+                    statusMessage.textContent = 'กำลังอ่านต่อค่ะ...';
                     playFromIndex(currentIndex);
                 }
             });
 
+            // ฟังก์ชันหั่นข้อความยาวๆ เป็นท่อนเล็กๆ
             function chunkText(text, maxLen) {
+                if (text.length <= maxLen) return [text];
+                
                 const words = text.split(/([\s\n]+)/); 
                 const chunks = [];
                 let currentChunk = '';
 
                 for (let word of words) {
                     if ((currentChunk + word).length > maxLen) {
-                        chunks.push(currentChunk);
+                        if (currentChunk.trim().length > 0) chunks.push(currentChunk.trim());
                         currentChunk = word;
                     } else {
                         currentChunk += word;
                     }
                 }
-                if (currentChunk.trim().length > 0) chunks.push(currentChunk);
-                return chunks.filter(c => c.trim().length > 0);
+                if (currentChunk.trim().length > 0) chunks.push(currentChunk.trim());
+                
+                // ถ้า chunks ว่างเปล่า (กรณีพิเศษ) ให้ตัดแบ่งตาม maxLen เลย
+                if (chunks.length === 0 && text.length > 0) {
+                    for (let i = 0; i < text.length; i += maxLen) {
+                        chunks.push(text.slice(i, i + maxLen));
+                    }
+                }
+                return chunks;
             }
 
+            // ฟังก์ชันดาวน์โหลดไฟล์เสียงโดยตรง (แก้ปัญหา fetch CORS)
+            function triggerDownload(url, filename) {
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = filename;
+                a.target = '_blank';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            }
+
+            // ปุ่มดาวน์โหลด (แก้ไขใหม่ - ไม่ใช้ fetch แล้ว)
             downloadButton.addEventListener('click', async () => {
                 if (isDownloading) return;
 
                 const rawText = speechText.value.trim();
                 const filteredText = filterTextToSpeak(rawText);
                 if (!filteredText) { 
-                    statusMessage.textContent = 'พิมพ์ข้อความก่อนนะครับ!'; 
+                    statusMessage.textContent = 'พิมพ์ข้อความก่อนนะคะ!'; 
                     return; 
                 }
 
-                stopSpeaking(); 
+                stopSpeaking();
                 isDownloading = true;
                 downloadButton.classList.add('opacity-50', 'cursor-not-allowed');
                 loadingIcon.style.display = 'inline-block';
                 downloadProgress.style.width = '0%';
 
+                // หั่นข้อความ ท่อนละไม่เกิน 600 ตัวอักษร
                 const chunks = chunkText(filteredText, 600);
                 const totalChunks = chunks.length;
-                if(totalChunks > 1) {
-                    statusMessage.textContent = `ข้อความยาวมาก ต้องแบ่งดาวน์โหลด ${totalChunks} ส่วน...`;
-                } else {
-                    statusMessage.textContent = `กำลังโหลดไฟล์เสียงครับ...`;
-                }
-                
                 const apiKey = selectedVoice === 'Thai Female' ? 'Negu9VLC' : '6uRDqcc4';
-                let allBlobs = []; 
+                
+                statusMessage.textContent = totalChunks > 1 
+                    ? `กำลังเตรียมดาวน์โหลด ${totalChunks} ไฟล์...` 
+                    : 'กำลังเตรียมดาวน์โหลด...';
 
                 try {
+                    // ดาวน์โหลดทีละท่อน (เว้นระยะห่างเล็กน้อยเพื่อไม่ให้บราวเซอร์บล็อก)
                     for (let i = 0; i < totalChunks; i++) {
-                        if(totalChunks > 1) {
-                            statusMessage.textContent = `กำลังโหลดและเย็บส่วนที่ ${i + 1} จาก ${totalChunks} ...`;
-                        }
+                        const url = `https://code.responsivevoice.org/getvoice.php?t=${encodeURIComponent(chunks[i])}&tl=th&sv=&vn=${encodeURIComponent(selectedVoice)}&pitch=0.5&rate=${currentRate}&vol=1&key=${apiKey}`;
+                        
+                        const filename = totalChunks > 1 
+                            ? `TheMuiz_Audio_Part${i + 1}_of_${totalChunks}.mp3` 
+                            : `TheMuiz_Audio_${Date.now()}.mp3`;
+                        
+                        triggerDownload(url, filename);
+                        
                         downloadProgress.style.width = `${((i + 1) / totalChunks) * 100}%`;
+                        statusMessage.textContent = `ดาวน์โหลดส่วนที่ ${i + 1} จาก ${totalChunks} ...`;
                         
-                        // สร้าง URL ต้นทาง
-                        const targetUrl = `https://code.responsivevoice.org/getvoice.php?t=${encodeURIComponent(chunks[i])}&tl=th&sv=&vn=${encodeURIComponent(selectedVoice)}&pitch=0.5&rate=${currentRate}&vol=1&key=${apiKey}`;
-                        
-                        // ใช้ Proxy (พี่ไรเดอร์) ไปดึงข้อมูลมาให้ เพื่อหลบการโดนบล็อก (CORS)
-                        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
-                        
-                        const response = await fetch(proxyUrl);
-                        if (!response.ok) throw new Error('โหลด API พลาด');
-                        
-                        const blob = await response.blob();
-                        allBlobs.push(blob); 
-
-                        await new Promise(r => setTimeout(r, 500)); 
+                        // พักหายใจระหว่างไฟล์ (ป้องกัน popup blocker / rate limit)
+                        if (i < totalChunks - 1) {
+                            await new Promise(r => setTimeout(r, 800));
+                        }
                     }
 
-                    statusMessage.textContent = 'กำลังเตรียมไฟล์ให้ดาวน์โหลด...';
-
-                    const finalBlob = new Blob(allBlobs, { type: 'audio/mpeg' });
-                    const blobUrl = window.URL.createObjectURL(finalBlob);
-                    
-                    const a = document.createElement('a');
-                    a.style.display = 'none';
-                    a.href = blobUrl;
-                    a.download = `TheMuiz_Audio_${Date.now()}.mp3`;
-                    document.body.appendChild(a);
-                    a.click();
-                    
-                    window.URL.revokeObjectURL(blobUrl);
-                    statusMessage.textContent = 'เสร็จเรียบร้อย! โหลดไฟล์สำเร็จแล้วครับพี่มุ่ย 🎉';
+                    statusMessage.textContent = totalChunks > 1 
+                        ? 'ดาวน์โหลดครบทุกส่วนแล้วค่ะ! 🎉' 
+                        : 'ดาวน์โหลดสำเร็จแล้วค่ะ! 🎉';
 
                 } catch (error) {
                     console.error(error);
-                    // เปลี่ยนข้อความแจ้งเตือนให้ตรงกับความจริง
-                    statusMessage.textContent = 'เกิดข้อผิดพลาดในการดาวน์โหลด อาจจะติดระบบป้องกัน ลองใหม่อีกครั้งนะครับ';
+                    statusMessage.textContent = 'เกิดข้อผิดพลาด ลองรีเฟรชหน้าแล้วลองใหม่นะคะ';
                 } finally {
                     isDownloading = false;
                     downloadButton.classList.remove('opacity-50', 'cursor-not-allowed');
                     loadingIcon.style.display = 'none';
-                    setTimeout(() => { downloadProgress.style.width = '0%'; }, 2000); 
+                    setTimeout(() => { downloadProgress.style.width = '0%'; }, 3000);
                 }
             });
 
@@ -322,10 +329,9 @@
                 stopSpeaking(); 
                 speechText.value = ''; 
                 charCount.textContent = '0';
-                statusMessage.textContent = 'ล้างข้อความเรียบร้อยครับ'; 
+                statusMessage.textContent = 'ล้างข้อความเรียบร้อยค่ะ'; 
             });
         });
     </script>
 </body>
 </html>
-
